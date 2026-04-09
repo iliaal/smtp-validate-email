@@ -3,3 +3,4 @@ tests.php
 /vendor/
 .idea
 *~
+.phpunit.result.cache

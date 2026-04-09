@@ -234,7 +234,7 @@ class SMTPValidateEmail
 		if (!$this->catchall_test) {
 			return FALSE;
 		}
-		$test = 'catch-all-test-' . time();
+		$test = 'catch-all-test-' . bin2hex(random_bytes(8));
 		$accepted = $this->rcpt($test . '@' . $domain);
 		if ($accepted) {
 			// success on a non-existing address is a "catch-all"
@@ -290,8 +290,8 @@ class SMTPValidateEmail
 			}
 			asort($mxs);
 
-			// add the hostname itself with 0 weight (RFC 2821)
-			$mxs[$domain] = 0;
+			// add the hostname itself as last-resort fallback (RFC 5321)
+			$mxs[$domain] = empty($mxs) ? 0 : max($mxs) + 1;
 
 			$this->debug('MX records (' . $domain . '): ' . print_r($mxs, TRUE));
 			$this->domains_info[$domain] = array();
@@ -426,7 +426,7 @@ class SMTPValidateEmail
 	 */
 	protected function connected()
 	{
-		return is_resource($this->socket);
+		return is_resource($this->socket) && !feof($this->socket);
 	}
 
 	/**
@@ -627,10 +627,6 @@ class SMTPValidateEmail
 				$this->state['rcpt'] = TRUE;
 				$is_valid = TRUE;
 			} catch (SMTP_Validate_Email_Exception_Unexpected_Response $e) {
-			    if (stripos($e->getMessage(), 'IP reverse lookup rejected') !== false) {
-                    $this->state['rcpt'] = TRUE;
-                    return true;
-                }
 				$this->debug('Unexpected response to RCPT TO: ' . $e->getMessage());
 				$this->results[$to . '_error_msg'] = $e->getMessage();
 			}
@@ -741,7 +737,7 @@ class SMTPValidateEmail
 		}
 
 		// retrieve response
-		$line = fgets($this->socket, 1024);
+		$line = fgets($this->socket, 4096);
 		$this->debug('<<<recv: ' . $line);
 		// have we timed out?
 		$info = stream_get_meta_data($this->socket);
@@ -828,11 +824,18 @@ class SMTPValidateEmail
 		}
 		$this->domains = array();
 		foreach ($emails as $email) {
+			if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+				$this->results[$email] = false;
+				$this->results[$email . '_error_msg'] = 'Invalid email format';
+				continue;
+			}
 			list($user, $domain) = $this->parse_email($email);
 			if (!isset($this->domains[$domain])) {
 				$this->domains[$domain] = array();
 			}
-			$this->domains[$domain][] = $user;
+			if (!in_array($user, $this->domains[$domain], true)) {
+				$this->domains[$domain][] = $user;
+			}
 		}
 	}
 

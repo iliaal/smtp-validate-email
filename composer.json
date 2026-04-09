@@ -1,13 +1,18 @@
 {
-    "name": "gubagoo/smtp-validate-email",
-    "description": "Validates an email address by checking for MX records and performing and SMTP triplet connection",
-    "keywords": ["email","smtp", "validation"],
-    "homepage": "https://github.com/gubagoo/smtp-validate-email",
-    "license": "MIT",
+    "name": "iliaal/smtp-validate-email",
+    "description": "Validates an email address by checking for MX records and performing an SMTP triplet connection",
+    "keywords": ["email", "smtp", "validation"],
+    "homepage": "https://github.com/iliaal/smtp-validate-email",
+    "license": "GPL-3.0-or-later",
     "type": "library",
     "authors": [
         {
-            "name": "Tomaš Trkulja [zytzagoo]",
+            "name": "Ilia Alshanetsky",
+            "email": "ilia@ilia.ws",
+            "homepage": "https://github.com/iliaal"
+        },
+        {
+            "name": "Tomaš Trkulja",
             "email": "zyt@zytzagoo.net"
         },
         {
@@ -19,10 +24,20 @@
             "email": "julian@devmasters.nl"
         }
     ],
-    "require": {},
+    "require": {
+        "php": ">=8.1"
+    },
+    "require-dev": {
+        "phpunit/phpunit": "^10.5"
+    },
     "autoload": {
         "psr-4": {
             "SMTPValidateEmail\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "SMTPValidateEmail\\Tests\\": "tests/"
         }
     }
 }
