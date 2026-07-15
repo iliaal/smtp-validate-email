@@ -82,11 +82,11 @@ class RcptTest extends TestCase
         $this->assertFalse($result);
     }
 
-    public function test_not_connected_returns_null(): void
+    public function test_not_connected_returns_false(): void
     {
         $this->validator->setConnected(false);
         $result = $this->validator->exposedRcpt('user@example.com');
-        $this->assertNull($result);
+        $this->assertFalse($result);
     }
 
     public function test_no_mail_from_throws(): void

@@ -3,8 +3,10 @@
 namespace SMTPValidateEmail\Tests;
 
 use SMTPValidateEmail\SMTPValidateEmail;
+use SMTPValidateEmail\SMTP_Validate_Email_Exception;
 use SMTPValidateEmail\SMTP_Validate_Email_Exception_No_Connection;
 use SMTPValidateEmail\SMTP_Validate_Email_Exception_No_Response;
+use SMTPValidateEmail\SMTP_Validate_Email_Exception_Timeout;
 
 class TestableValidator extends SMTPValidateEmail
 {
@@ -16,6 +18,15 @@ class TestableValidator extends SMTPValidateEmail
 
     /** @var bool Whether we're "connected" */
     private bool $isConnected = false;
+
+    /** @var list<string>|null Hosts that should fail connect (for MX failover tests) */
+    public ?array $failConnectHosts = null;
+
+    /** @var list<array{0: list<string>, 1: list<int>}>|null Queue of mx_query results */
+    public ?array $mxQueryResults = null;
+
+    /** @var bool When true, next recv throws Timeout */
+    public bool $throwTimeoutOnRecv = false;
 
     public function queueResponse(string ...$lines): void
     {
@@ -41,7 +52,16 @@ class TestableValidator extends SMTPValidateEmail
 
     protected function connect($host): void
     {
+        if ($this->failConnectHosts !== null && in_array($host, $this->failConnectHosts, true)) {
+            throw new SMTP_Validate_Email_Exception_No_Connection(
+                'Cannot open a connection to remote host (' . $host . ')'
+            );
+        }
         $this->isConnected = true;
+        $ref = new \ReflectionProperty(SMTPValidateEmail::class, 'connect_host');
+        $ref->setValue($this, $host);
+        $href = new \ReflectionProperty(SMTPValidateEmail::class, 'host');
+        $href->setValue($this, $host . ':' . $this->connect_port);
     }
 
     protected function disconnect($quit = true): void
@@ -58,6 +78,10 @@ class TestableValidator extends SMTPValidateEmail
         if (!$this->connected()) {
             throw new SMTP_Validate_Email_Exception_No_Connection('No connection');
         }
+        // Mirror production CR/LF guard so injection tests exercise the same path
+        if (preg_match('/[\r\n\0]/', $cmd)) {
+            throw new SMTP_Validate_Email_Exception('SMTP command contains invalid control characters');
+        }
         $this->sentCommands[] = $cmd;
         return strlen($cmd);
     }
@@ -67,6 +91,10 @@ class TestableValidator extends SMTPValidateEmail
         if (!$this->connected()) {
             throw new SMTP_Validate_Email_Exception_No_Connection('No connection');
         }
+        if ($this->throwTimeoutOnRecv) {
+            $this->throwTimeoutOnRecv = false;
+            throw new SMTP_Validate_Email_Exception_Timeout('Timed out in recv');
+        }
         if (empty($this->recvQueue)) {
             throw new SMTP_Validate_Email_Exception_No_Response('No response in recv');
         }
@@ -75,6 +103,9 @@ class TestableValidator extends SMTPValidateEmail
 
     protected function mx_query($domain): array
     {
+        if ($this->mxQueryResults !== null && $this->mxQueryResults !== []) {
+            return array_shift($this->mxQueryResults);
+        }
         return [[$domain], [10]];
     }
 
@@ -129,6 +160,8 @@ class TestableValidator extends SMTPValidateEmail
             'mail' => false,
             'rcpt' => false,
         ]);
+        $tls = new \ReflectionProperty(SMTPValidateEmail::class, 'tls');
+        $tls->setValue($this, false);
     }
 
     /**

@@ -92,7 +92,12 @@ $validator->noop = false;
 
 // Enable debug output (default: false)
 $validator->debug = false;
+
+// Verify TLS certificates during STARTTLS (default: false; many MXs use mismatched certs)
+$validator->ssl_verify_peer = false;
 ```
+
+The sender address (constructor / `set_sender()` / `validate(..., $sender)`) must be a usable `local@domain` string. Control characters (CR/LF/NUL) and `<>` are rejected to prevent SMTP command injection. Recipients are still validated with `filter_var()`.
 
 ### Results
 

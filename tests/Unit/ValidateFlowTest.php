@@ -151,8 +151,14 @@ class ValidateFlowTest extends TestCase
     public function test_empty_emails_returns_empty(): void
     {
         $v = $this->createValidator();
-        $results = $v->validate([]);
+        // No domain info requested → empty result map
+        $results = $v->validate([], '', false);
         $this->assertEmpty($results);
+        // Default include_domains_info still has no address keys
+        $withDomains = $v->validate([]);
+        $this->assertArrayHasKey('domains', $withDomains);
+        $this->assertSame([], $withDomains['domains']);
+        $this->assertCount(1, $withDomains);
     }
 
     public function test_domains_info_contains_mxs(): void
