@@ -135,7 +135,7 @@ class ReviewFixesTest extends TestCase
         $v->setConnected(true);
         $v->queueResponse("250-STARTTLS\r\n");
         $v->queueResponse("250 OK\r\n");
-        $v->exposedExpect(250);
+        $v->exposedExpect(250, null, false, true);
         $this->assertTrue($v->getProperty('tls'));
 
         $v->setConnected(true);
@@ -150,7 +150,7 @@ class ReviewFixesTest extends TestCase
         $v = new TestableValidator();
         $v->setConnected(true);
         $v->queueResponse("250 STARTTLS\r\n");
-        $v->exposedExpect(250);
+        $v->exposedExpect(250, null, false, true);
         $this->assertTrue($v->getProperty('tls'));
     }
 

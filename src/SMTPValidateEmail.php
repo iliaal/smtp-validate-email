@@ -17,12 +17,11 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  *
- * @version 0.6
+ * @version 1.0.0
  * @todo
  *   - finish the graylisting thingy
  *   - perhaps re-implement some methods as static?
  *   - introduce a main socket loop if this state-based approach doesn't work out
- *   - implement TLS probably
  *   - more code examples, more tests
  *
  * The class retrieves MX records for the email domain and then connects to the
@@ -155,15 +154,6 @@ class SMTPValidateEmail
 	public $no_conn_is_valid = FALSE;
 	// do we consider "greylisted" responses as valid or invalid addresses
 	public $greylisted_considered_valid = TRUE;
-
-	/**
-	 * If on Windows (or other places that don't have getmxrr()), this is the
-	 * nameserver that will be used for MX querying.
-	 * Set as empty to use the DNS specified via your current network connection.
-	 * @see getmxrr()
-	 */
-	// protected $mx_query_ns = 'dns1.t-com.hr';
-	protected $mx_query_ns = '';
 
 	/**
 	 * Timeout values for various commands (in seconds) per RFC 2821
@@ -404,6 +394,11 @@ class SMTPValidateEmail
 					$this->set_domain_results($users, $domain, $this->no_comm_is_valid, $e->getMessage(), $recipients_probed);
 				} catch (SMTP_Validate_Email_Exception_Send_Failed $e) {
 					$this->set_domain_results($users, $domain, $this->no_comm_is_valid, $e->getMessage(), $recipients_probed);
+				} catch (SMTP_Validate_Email_Exception $e) {
+					// Catch-all: No_Helo, No_Mail_From, MX-query errors and any other
+					// library exception must not abort the remaining domains in a
+					// multi-domain batch.
+					$this->set_domain_results($users, $domain, $this->no_comm_is_valid, $e->getMessage(), $recipients_probed);
 				}
 			} finally {
 				// Always release the socket so multi-domain runs cannot leak FDs
@@ -445,7 +440,9 @@ class SMTPValidateEmail
 				continue;
 			}
 			$this->results[$address] = $val;
-			$this->results[$address . '_error_msg'] = $error;
+			if ($error !== NULL) {
+				$this->results[$address . '_error_msg'] = $error;
+			}
 		}
 	}
 
@@ -544,8 +541,7 @@ class SMTPValidateEmail
 
 	/**
 	 * Sends a HELO/EHLO sequence
-	 * @todo Implement TLS
-	 * @return bool|null  True if successful, false otherwise
+	 * @return bool|null  True if successful, false otherwise (null if already done)
 	 */
 	protected function helo()
 	{
@@ -597,7 +593,7 @@ class SMTPValidateEmail
 
 		// @ is here because it is the only way to block PHP warnings :(
 		$result = @stream_socket_enable_crypto($this->socket, true,
-			STREAM_CRYPTO_METHOD_TLS_CLIENT | STREAM_CRYPTO_METHOD_TLSv1_2_CLIENT);
+			STREAM_CRYPTO_METHOD_TLS_CLIENT);
 		if (!$result) {
 			$this->disconnect(FALSE);
 			throw new SMTP_Validate_Email_Exception_No_TLS('STARTTLS crypto negotiation failed');
@@ -617,11 +613,11 @@ class SMTPValidateEmail
 		try {
 			// modern
 			$this->send('EHLO ' . $this->from_domain);
-			$this->expect(self::SMTP_GENERIC_SUCCESS, $this->command_timeouts['ehlo']);
+			$this->expect(self::SMTP_GENERIC_SUCCESS, $this->command_timeouts['ehlo'], FALSE, TRUE);
 		} catch (SMTP_Validate_Email_Exception_Unexpected_Response $e) {
 			// legacy
 			$this->send('HELO ' . $this->from_domain);
-			$this->expect(self::SMTP_GENERIC_SUCCESS, $this->command_timeouts['helo']);
+			$this->expect(self::SMTP_GENERIC_SUCCESS, $this->command_timeouts['helo'], FALSE, TRUE);
 		}
 	}
 
@@ -768,15 +764,21 @@ class SMTPValidateEmail
 			throw new SMTP_Validate_Email_Exception('SMTP command contains invalid control characters');
 		}
 		$this->debug('send>>>: ' . $cmd);
-		// write the cmd to the connection stream
-		$result = fwrite($this->socket, $cmd . self::CRLF);
-		// did the send work?
-		if ($result === FALSE) {
-			throw new SMTP_Validate_Email_Exception_Send_Failed('Send failed ' .
-				'on: ' . $this->host);
+		// write the cmd to the connection stream, retrying until fully written
+		// so a partial (short) fwrite cannot silently truncate the command
+		$data = $cmd . self::CRLF;
+		$length = strlen($data);
+		$written = 0;
+		while ($written < $length) {
+			$result = fwrite($this->socket, substr($data, $written));
+			if ($result === FALSE || $result === 0) {
+				throw new SMTP_Validate_Email_Exception_Send_Failed('Send failed ' .
+					'on: ' . $this->host);
+			}
+			$written += $result;
 		}
 
-		return $result;
+		return $written;
 	}
 
 	/**
@@ -797,16 +799,26 @@ class SMTPValidateEmail
 			stream_set_timeout($this->socket, $timeout);
 		}
 
-		// retrieve response
-		$line = fgets($this->socket, 4096);
+		// retrieve response, accumulating fgets() chunks until a full line
+		// (newline) arrives so responses longer than the read buffer are not
+		// split into bogus separate lines
+		$line = '';
+		do {
+			$part = fgets($this->socket, 4096);
+			// have we timed out?
+			$info = stream_get_meta_data($this->socket);
+			if (!empty($info['timed_out'])) {
+				throw new SMTP_Validate_Email_Exception_Timeout('Timed out in recv');
+			}
+			if ($part === FALSE) {
+				break; // EOF / peer closed; return what we have so far
+			}
+			$line .= $part;
+		} while (substr($line, -1) !== "\n");
+
 		$this->debug('<<<recv: ' . $line);
-		// have we timed out?
-		$info = stream_get_meta_data($this->socket);
-		if (!empty($info['timed_out'])) {
-			throw new SMTP_Validate_Email_Exception_Timeout('Timed out in recv');
-		}
 		// did we actually receive anything?
-		if ($line === FALSE) {
+		if ($line === '') {
 			throw new SMTP_Validate_Email_Exception_No_Response('No response in recv');
 		}
 
@@ -818,11 +830,17 @@ class SMTPValidateEmail
 	 * @param int|array $codes A list of one or more expected response codes
 	 * @param int $timeout The timeout for this individual command, if any
 	 * @param bool $empty_response_allowed When true, unexpected codes (other than hard-fail paths) are allowed
+	 * @param bool $capability_scan When true, scan response lines for a STARTTLS
+	 *                              capability advertisement. Only enabled for
+	 *                              EHLO/HELO responses; matching the string in
+	 *                              greetings or other responses would falsely
+	 *                              trigger STARTTLS against servers that never
+	 *                              advertised it.
 	 * @return string The last text message received
 	 * @throws SMTP_Validate_Email_Exception_Unexpected_Response
 	 * @throws SMTP_Validate_Email_Exception_No_Response
 	 */
-	protected function expect($codes, $timeout = NULL, $empty_response_allowed = FALSE)
+	protected function expect($codes, $timeout = NULL, $empty_response_allowed = FALSE, $capability_scan = FALSE)
 	{
 		if (!is_array($codes)) {
 			$codes = (array)$codes;
@@ -832,14 +850,14 @@ class SMTPValidateEmail
 		try {
 			$output = $text = $line = $this->recv($timeout);
 			while (preg_match("/^[0-9]+-/", $line)) {
-				if (stripos($line, 'STARTTLS') !== false) {
+				if ($capability_scan && stripos($line, 'STARTTLS') !== false) {
 					$this->tls = true;
 				}
 				$output .= $line = $this->recv($timeout);
 				$text .= $line;
 			}
 			// Final response line may also advertise STARTTLS (250 STARTTLS)
-			if (stripos($line, 'STARTTLS') !== false) {
+			if ($capability_scan && stripos($line, 'STARTTLS') !== false) {
 				$this->tls = true;
 			}
 			sscanf($line, '%d%s', $code, $text);
@@ -943,6 +961,12 @@ class SMTPValidateEmail
 	 */
 	protected function mx_query($domain)
 	{
+		if (!function_exists('getmxrr')) {
+			throw new SMTP_Validate_Email_Exception(
+				'getmxrr() is not available on this PHP build (it is not implemented on Windows); '
+				. 'cannot query MX records for ' . $domain
+			);
+		}
 		$hosts = array();
 		$weight = array();
 

@@ -18,7 +18,8 @@ Retrieves MX records for the email domain and connects to the domain's SMTP serv
 ## Requirements
 
 - PHP 8.1+
-- `getmxrr()` support (standard on Linux; available on Windows since PHP 5.3)
+- `getmxrr()` support (Linux/BSD; **not available on Windows**, where MX lookups
+  raise a descriptive exception)
 
 ## Installation
 
@@ -118,6 +119,8 @@ The sender address (constructor / `set_sender()` / `validate(..., $sender)`) mus
 ```
 
 Pass `false` as the third argument to `validate()` to exclude domain info from results.
+
+Note: `domains` is a reserved key in the result map; an email string cannot use it.
 
 ### Debug log
 

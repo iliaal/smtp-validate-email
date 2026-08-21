@@ -147,9 +147,9 @@ class TestableValidator extends SMTPValidateEmail
         return $this->rcpt($to);
     }
 
-    public function exposedExpect($codes, $timeout = null, $emptyAllowed = false): string
+    public function exposedExpect($codes, $timeout = null, $emptyAllowed = false, $capabilityScan = false): string
     {
-        return $this->expect($codes, $timeout, $emptyAllowed);
+        return $this->expect($codes, $timeout, $emptyAllowed, $capabilityScan);
     }
 
     private function resetStateViaReflection(): void

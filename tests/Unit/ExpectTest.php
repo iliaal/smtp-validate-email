@@ -52,10 +52,21 @@ class ExpectTest extends TestCase
         $this->validator->queueResponse("250-mail.example.com\r\n");
         $this->validator->queueResponse("250-STARTTLS\r\n");
         $this->validator->queueResponse("250 OK\r\n");
-        $this->validator->exposedExpect(250);
+        $this->validator->exposedExpect(250, null, false, true);
 
         $tls = $this->validator->getProperty('tls');
         $this->assertTrue($tls);
+    }
+
+    public function test_starttls_not_detected_without_capability_scan(): void
+    {
+        // A greeting/response merely mentioning the string must not set the flag
+        // (regression: banner '220 ... STARTTLS-ready' forced a spurious STARTTLS)
+        $this->validator->queueResponse("220 mail.example.com ESMTP STARTTLS-ready\r\n");
+        $this->validator->exposedExpect(220);
+
+        $tls = $this->validator->getProperty('tls');
+        $this->assertFalse($tls);
     }
 
     public function test_service_unavailable_throws_when_not_expected(): void

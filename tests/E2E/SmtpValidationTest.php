@@ -18,6 +18,8 @@ use SMTPValidateEmail\Tests\E2E\LocalSmtpValidator;
 #[Group('e2e')]
 class SmtpValidationTest extends TestCase
 {
+    /** @var resource|null */
+    private static $proc = null;
     private static int $serverPid = 0;
     private static int $port = 2525;
     private string $sender = 'test@localtest.test';
@@ -25,6 +27,9 @@ class SmtpValidationTest extends TestCase
     public static function setUpBeforeClass(): void
     {
         $script = __DIR__ . '/../fixtures/smtp_test_server.py';
+        // Overridable so parallel CI runs can avoid port collisions:
+        //   E2E_SMTP_PORT=2526 vendor/bin/phpunit --group e2e
+        self::$port = (int)(getenv('E2E_SMTP_PORT') ?: 2525);
         $port = self::$port;
 
         $descriptors = [
@@ -33,8 +38,11 @@ class SmtpValidationTest extends TestCase
             2 => ['pipe', 'w'],
         ];
 
+        // Array command form bypasses sh -c, so proc_terminate() below signals
+        // the python process itself instead of a shell wrapper that would
+        // orphan it (the reason the old code needed a 'pkill -f' cleanup).
         $proc = proc_open(
-            "python3 $script $port",
+            ['python3', $script, (string)$port],
             $descriptors,
             $pipes
         );
@@ -43,6 +51,7 @@ class SmtpValidationTest extends TestCase
             self::fail('Failed to start SMTP test server');
         }
 
+        self::$proc = $proc;
         self::$serverPid = proc_get_status($proc)['pid'];
 
         // Wait for the server to be ready (up to 3 seconds)
@@ -61,12 +70,21 @@ class SmtpValidationTest extends TestCase
 
     public static function tearDownAfterClass(): void
     {
-        if (self::$serverPid > 0) {
-            // Kill the process group to catch the child python process
-            posix_kill(self::$serverPid, SIGTERM);
-            // Also kill any python process on our port
-            exec('pkill -f "smtp_test_server.py ' . self::$port . '" 2>/dev/null');
-            usleep(100000);
+        if (is_resource(self::$proc)) {
+            // SIGTERM lets the aiosmtpd controller shut down cleanly; no
+            // ext-posix dependency and no risky pkill -f pattern matching.
+            proc_terminate(self::$proc);
+            // Give the server up to 3s to exit before reaping it
+            for ($i = 0; $i < 60; $i++) {
+                $status = proc_get_status(self::$proc);
+                if (!$status['running']) {
+                    break;
+                }
+                usleep(50000);
+            }
+            proc_close(self::$proc);
+            self::$proc = null;
+            self::$serverPid = 0;
         }
     }
 

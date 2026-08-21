@@ -21,7 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `recv()` buffer size increased from 1024 to 4096 bytes to handle long EHLO responses
 - Catch-all probe address uses `random_bytes()` instead of predictable `time()`
 - MX fallback domain weight set to `max(weights) + 1` instead of 0, correctly placing it last per RFC 5321
-- STARTTLS support with TLS 1.1 and 1.2
+- Opportunistic STARTTLS support (all TLS versions offered by the stream layer)
 - License corrected to GPL-3.0-or-later in composer.json (matching LICENSE.txt)
 - README rewritten with full usage documentation, configuration reference, and test instructions
 - Project metadata updated in composer.json (owner, homepage, authors)
