@@ -413,11 +413,12 @@ class SMTPValidateEmail
 
 	public function get_results($include_domains_info = TRUE)
 	{
+		$results = $this->results;
 		if ($include_domains_info) {
-			$this->results['domains'] = $this->domains_info;
+			$results['domains'] = $this->domains_info;
 		}
 
-		return $this->results;
+		return $results;
 	}
 
 	/**
