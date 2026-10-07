@@ -4,27 +4,38 @@ on:
   push:
     branches: [master]
   pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tests-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   tests:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
-      - uses: shivammathur/setup-php@v2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # 2.37.2
         with:
           php-version: '8.4'
           extensions: dom, mbstring, xml, xmlwriter
           coverage: none
           tools: composer:v2
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
-          python-version: '3.x'
+          python-version: '3.13'
       - run: composer install --no-interaction --prefer-dist --no-progress
       - name: Lint PHP
         run: find src tests -name '*.php' -print0 | xargs -0 -n1 php -l
       - name: Unit tests
         run: vendor/bin/phpunit
       - name: Install local SMTP fixture
-        run: python -m pip install aiosmtpd
+        run: python -m pip install aiosmtpd==1.4.6
       - name: Local SMTP tests
         run: vendor/bin/phpunit --group e2e
