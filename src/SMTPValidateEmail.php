@@ -395,11 +395,15 @@ class SMTPValidateEmail
 				} catch (SMTP_Validate_Email_Exception_Send_Failed $e) {
 					$this->set_domain_results($users, $domain, $this->no_comm_is_valid, $e->getMessage(), $recipients_probed);
 				} catch (SMTP_Validate_Email_Exception $e) {
-					// Catch-all: No_Helo, No_Mail_From, MX-query errors and any other
+					// Catch-all: No_Helo, No_Mail_From and any other
 					// library exception must not abort the remaining domains in a
 					// multi-domain batch.
 					$this->set_domain_results($users, $domain, $this->no_comm_is_valid, $e->getMessage(), $recipients_probed);
 				}
+			} catch (SMTP_Validate_Email_Exception $e) {
+				// MX lookup and socket setup happen before the SMTP session's
+				// handlers above. Isolate these failures to the current domain too.
+				$this->set_domain_results($users, $domain, $this->no_comm_is_valid, $e->getMessage());
 			} finally {
 				// Always release the socket so multi-domain runs cannot leak FDs
 				if ($this->connected()) {
