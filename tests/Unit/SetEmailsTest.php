@@ -52,6 +52,40 @@ class SetEmailsTest extends TestCase
         $this->assertSame(['example.com' => ['user']], $domains);
     }
 
+    public function test_deduplication_preserves_order_case_and_numeric_local_parts(): void
+    {
+        $this->validator->set_emails([
+            '1@example.com', '01@example.com', 'Alice@example.com',
+            '1@other.com', 'alice@example.com', '1@example.com',
+            'Alice@example.com', '01@example.com', '1@other.com',
+        ]);
+
+        $this->assertSame([
+            'example.com' => ['1', '01', 'Alice', 'alice'],
+            'other.com' => ['1'],
+        ], $this->validator->getProperty('domains'));
+    }
+
+    public function test_deduplication_state_is_reset_for_each_email_list(): void
+    {
+        $this->validator->set_emails(['alice@example.com', 'bob@example.com']);
+        $this->validator->set_emails(['bob@example.com', 'alice@example.com', 'bob@example.com']);
+
+        $this->assertSame(
+            ['example.com' => ['bob', 'alice']],
+            $this->validator->getProperty('domains')
+        );
+    }
+
+    public function test_large_same_domain_batch_keeps_each_user_once(): void
+    {
+        $users = array_map(static fn (int $i): string => 'user' . $i, range(1, 10000));
+        $emails = array_map(static fn (string $user): string => $user . '@example.com', $users);
+        $this->validator->set_emails(array_merge($emails, array_reverse($emails)));
+
+        $this->assertSame(['example.com' => $users], $this->validator->getProperty('domains'));
+    }
+
     public function test_invalid_email_format_skipped(): void
     {
         $this->validator->set_emails(['valid@example.com', 'not-an-email', '@missing-user.com', 'noat']);
