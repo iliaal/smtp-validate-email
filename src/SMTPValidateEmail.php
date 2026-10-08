@@ -908,6 +908,7 @@ class SMTPValidateEmail
 		}
 		$this->emails = $emails;
 		$this->domains = array();
+		$seen = array();
 		foreach ($emails as $email) {
 			if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
 				$this->results[$email] = false;
@@ -918,7 +919,10 @@ class SMTPValidateEmail
 			if (!isset($this->domains[$domain])) {
 				$this->domains[$domain] = array();
 			}
-			if (!in_array($user, $this->domains[$domain], true)) {
+			// Hash lookups keep large same-domain batches linear while retaining
+			// the original, case-sensitive user list and first-seen order.
+			if (!isset($seen[$domain][$user])) {
+				$seen[$domain][$user] = true;
 				$this->domains[$domain][] = $user;
 			}
 		}
