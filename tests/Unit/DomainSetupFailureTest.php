@@ -3,9 +3,11 @@
 namespace SMTPValidateEmail\Tests\Unit;
 
 use PHPUnit\Framework\Attributes\DataProvider;
+use PHPUnit\Framework\Attributes\RunInSeparateProcess;
 use PHPUnit\Framework\TestCase;
 use SMTPValidateEmail\SMTP_Validate_Email_Exception;
 use SMTPValidateEmail\SMTP_Validate_Email_Exception_No_Timeout;
+use SMTPValidateEmail\SMTPValidateEmail;
 use SMTPValidateEmail\Tests\TestableValidator;
 
 class DomainSetupFailureTest extends TestCase
@@ -98,4 +100,44 @@ class DomainSetupFailureTest extends TestCase
         $v->validate(['user@broken.example']);
     }
 
+    #[RunInSeparateProcess]
+    public function test_missing_getmxrr_propagates_after_earlier_domain_is_isolated(): void
+    {
+        require __DIR__ . '/../fixtures/missing_getmxrr.php';
+
+        $v = new class extends TestableValidator {
+            protected function mx_query($domain): array
+            {
+                if ($domain === 'timeout.example') {
+                    return parent::mx_query($domain);
+                }
+                return SMTPValidateEmail::mx_query($domain);
+            }
+
+            protected function connect($host): void
+            {
+                parent::connect($host);
+                if ($host === 'timeout.example') {
+                    throw new SMTP_Validate_Email_Exception_No_Timeout('Cannot set timeout');
+                }
+            }
+        };
+        $v->no_comm_is_valid = true;
+
+        try {
+            $v->validate(['user@timeout.example', 'user@windows.example']);
+            $this->fail('validate() must not swallow a missing getmxrr()');
+        } catch (SMTP_Validate_Email_Exception $e) {
+            $this->assertSame(
+                'getmxrr() is not available on this PHP build (it is not implemented on Windows); '
+                . 'cannot query MX records for windows.example',
+                $e->getMessage()
+            );
+        }
+
+        $results = $v->get_results(false);
+        $this->assertTrue($results['user@timeout.example']);
+        $this->assertSame('Cannot set timeout', $results['user@timeout.example_error_msg']);
+        $this->assertArrayNotHasKey('user@windows.example', $results);
+    }
 }
