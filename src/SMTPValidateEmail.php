@@ -812,7 +812,12 @@ class SMTPValidateEmail
 				throw new SMTP_Validate_Email_Exception_Timeout('Timed out in recv');
 			}
 			if ($part === FALSE) {
-				break; // EOF / peer closed; return what we have so far
+				if ($line !== '') {
+					// A reply is not complete until its newline arrives. In
+					// particular, EOF after "250 OK" must not validate a mailbox.
+					throw new SMTP_Validate_Email_Exception_No_Response('Incomplete response in recv');
+				}
+				break;
 			}
 			$line .= $part;
 		} while (substr($line, -1) !== "\n");
