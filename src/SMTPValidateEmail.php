@@ -84,6 +84,11 @@ class SMTP_Validate_Email_Exception_Send_Failed extends SMTP_Validate_Email_Exce
 
 }
 
+class SMTP_Validate_Email_Exception_No_MX_Support extends SMTP_Validate_Email_Exception
+{
+
+}
+
 // SMTP validation class
 class SMTPValidateEmail
 {
@@ -395,11 +400,18 @@ class SMTPValidateEmail
 				} catch (SMTP_Validate_Email_Exception_Send_Failed $e) {
 					$this->set_domain_results($users, $domain, $this->no_comm_is_valid, $e->getMessage(), $recipients_probed);
 				} catch (SMTP_Validate_Email_Exception $e) {
-					// Catch-all: No_Helo, No_Mail_From, MX-query errors and any other
+					// Catch-all: No_Helo, No_Mail_From and any other
 					// library exception must not abort the remaining domains in a
 					// multi-domain batch.
 					$this->set_domain_results($users, $domain, $this->no_comm_is_valid, $e->getMessage(), $recipients_probed);
 				}
+			} catch (SMTP_Validate_Email_Exception_No_MX_Support $e) {
+				// A PHP build without MX lookups fails every domain, not just this one.
+				throw $e;
+			} catch (SMTP_Validate_Email_Exception $e) {
+				// MX lookup and socket setup happen before the SMTP session's
+				// handlers above. Isolate these failures to the current domain too.
+				$this->set_domain_results($users, $domain, $this->no_comm_is_valid, $e->getMessage());
 			} finally {
 				// Always release the socket so multi-domain runs cannot leak FDs
 				if ($this->connected()) {
@@ -968,11 +980,12 @@ class SMTPValidateEmail
 	 * Queries the DNS server for MX entries of a certain domain.
 	 * @param string $domain The domain for which to retrieve MX records
 	 * @return array         MX hosts and their weights
+	 * @throws SMTP_Validate_Email_Exception_No_MX_Support
 	 */
 	protected function mx_query($domain)
 	{
 		if (!function_exists('getmxrr')) {
-			throw new SMTP_Validate_Email_Exception(
+			throw new SMTP_Validate_Email_Exception_No_MX_Support(
 				'getmxrr() is not available on this PHP build (it is not implemented on Windows); '
 				. 'cannot query MX records for ' . $domain
 			);
