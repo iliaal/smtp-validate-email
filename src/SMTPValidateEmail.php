@@ -303,6 +303,14 @@ class SMTPValidateEmail
 				}
 				asort($mxs);
 
+				// RFC 7505: a single preference-0 root MX explicitly accepts no mail.
+				// getmxrr() may expose the DNS root as an empty string rather than ".".
+				if (count($mxs) === 1 && (isset($mxs['']) || isset($mxs['.'])) && reset($mxs) === 0) {
+					$this->domains_info[$domain] = array('users' => $users, 'mxs' => $mxs);
+					$this->set_domain_results($users, $domain, FALSE, 'Domain does not accept mail (null MX)');
+					continue;
+				}
+
 				// Add the hostname itself as last-resort fallback only if it is
 				// not already an explicit MX; preserve its advertised priority.
 				if (!array_key_exists($domain, $mxs)) {
