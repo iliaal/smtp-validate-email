@@ -413,8 +413,8 @@ class SMTPValidateEmail
 				// handlers above. Isolate these failures to the current domain too.
 				$this->set_domain_results($users, $domain, $this->no_comm_is_valid, $e->getMessage());
 			} finally {
-				// Always release the socket so multi-domain runs cannot leak FDs
-				if ($this->connected()) {
+				// Release EOF-marked sockets too: disconnected does not mean closed.
+				if ($this->connected() || is_resource($this->socket)) {
 					$this->disconnect(FALSE);
 				}
 			}
