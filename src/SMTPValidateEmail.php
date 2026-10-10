@@ -303,8 +303,11 @@ class SMTPValidateEmail
 				}
 				asort($mxs);
 
-				// add the hostname itself as last-resort fallback (RFC 5321)
-				$mxs[$domain] = empty($mxs) ? 0 : max($mxs) + 1;
+				// Add the hostname itself as last-resort fallback only if it is
+				// not already an explicit MX; preserve its advertised priority.
+				if (!array_key_exists($domain, $mxs)) {
+					$mxs[$domain] = empty($mxs) ? 0 : max($mxs) + 1;
+				}
 
 				$this->debug('MX records (' . $domain . '): ' . print_r($mxs, TRUE));
 				$this->domains_info[$domain] = array();

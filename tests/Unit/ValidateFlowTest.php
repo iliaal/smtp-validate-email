@@ -175,6 +175,7 @@ class ValidateFlowTest extends TestCase
     public function test_mx_fallback_domain_has_highest_weight(): void
     {
         $v = $this->createValidator();
+        $v->mxQueryResults = [[['mx2.example.com', 'mx1.example.com'], [20, 10]]];
         $this->scriptValidConversation($v);
         $results = $v->validate(['user@example.com']);
 
