@@ -82,8 +82,9 @@ $validator->no_comm_is_valid = false;
 // Treat connection failures as valid (default: false)
 $validator->no_conn_is_valid = false;
 
-// Treat greylisted responses as valid (default: true)
+// Treat greylisted real-recipient responses as valid (default: true)
 $validator->greylisted_considered_valid = true;
+// Temporary failures of random catch-all probes never prove a catch-all.
 
 // SMTP port (default: 25)
 $validator->connect_port = 25;

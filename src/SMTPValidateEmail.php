@@ -127,6 +127,8 @@ class SMTPValidateEmail
 	public $noop = FALSE;
 
 	private $tls = false;
+	// Temporary RCPT acceptance is not evidence that a random mailbox exists.
+	private $probing_catchall = false;
 
 	/**
 	 * Whether to verify the peer certificate during STARTTLS.
@@ -157,7 +159,7 @@ class SMTPValidateEmail
 	 * set the value appropriately.
 	 */
 	public $no_conn_is_valid = FALSE;
-	// do we consider "greylisted" responses as valid or invalid addresses
+	// Treat greylisted real-recipient replies as valid; catch-all probes require acceptance.
 	public $greylisted_considered_valid = TRUE;
 
 	/**
@@ -242,7 +244,12 @@ class SMTPValidateEmail
 			return FALSE;
 		}
 		$test = 'catch-all-test-' . bin2hex(random_bytes(8));
-		$accepted = $this->rcpt($test . '@' . $domain);
+		$this->probing_catchall = true;
+		try {
+			$accepted = $this->rcpt($test . '@' . $domain);
+		} finally {
+			$this->probing_catchall = false;
+		}
 		if ($accepted) {
 			// success on a non-existing address is a "catch-all"
 			$this->domains_info[$domain]['catchall'] = TRUE;
@@ -696,7 +703,7 @@ class SMTPValidateEmail
 			self::SMTP_GENERIC_SUCCESS,
 			self::SMTP_USER_NOT_LOCAL
 		);
-		if ($this->greylisted_considered_valid) {
+		if ($this->greylisted_considered_valid && !$this->probing_catchall) {
 			$expected_codes = array_merge($expected_codes, $this->greylisted);
 		}
 		// issue RCPT TO — transport failures propagate to validate() for no_comm handling
