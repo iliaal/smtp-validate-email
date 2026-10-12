@@ -20,6 +20,8 @@ class SmtpValidationTest extends TestCase
 {
     /** @var resource|null */
     private static $proc = null;
+    /** @var array<int, resource> */
+    private static array $pipes = [];
     private static int $serverPid = 0;
     private static int $port = 2525;
     private string $sender = 'test@localtest.test';
@@ -54,18 +56,38 @@ class SmtpValidationTest extends TestCase
         self::$proc = $proc;
         self::$serverPid = proc_get_status($proc)['pid'];
 
-        // Wait for the server to be ready (up to 3 seconds)
+        fclose($pipes[0]);
+        self::$pipes = [$pipes[1], $pipes[2]];
+        foreach (self::$pipes as $pipe) {
+            stream_set_blocking($pipe, false);
+        }
+
+        // Only this child's readiness message proves it owns the port. A TCP
+        // connection could instead reach an unrelated pre-existing listener.
+        $ready = "SMTP test server listening on 127.0.0.1:$port\n";
+        $output = '';
+        $errors = '';
         $deadline = microtime(true) + 3.0;
+        $failure = "SMTP test server did not start within 3 seconds on port $port";
         while (microtime(true) < $deadline) {
-            $sock = @fsockopen('127.0.0.1', $port, $errno, $errstr, 0.1);
-            if ($sock) {
-                fclose($sock);
+            $output .= stream_get_contents(self::$pipes[0]);
+            $errors .= stream_get_contents(self::$pipes[1]);
+            if (!proc_get_status($proc)['running']) {
+                // Drain anything written between the previous read and exit.
+                $errors .= stream_get_contents(self::$pipes[1]);
+                $failure = "SMTP test server exited before readiness on port $port";
+                break;
+            }
+            if (str_contains($output, $ready)) {
                 return;
             }
             usleep(50000);
         }
 
-        self::fail("SMTP test server did not start within 3 seconds on port $port");
+        // PHPUnit may skip class teardown when setup fails. Reap the child and
+        // close its pipes here as well as on normal teardown.
+        self::tearDownAfterClass();
+        self::fail($failure . ($errors === '' ? '' : "\n" . trim($errors)));
     }
 
     public static function tearDownAfterClass(): void
@@ -82,6 +104,10 @@ class SmtpValidationTest extends TestCase
                 }
                 usleep(50000);
             }
+            foreach (self::$pipes as $pipe) {
+                fclose($pipe);
+            }
+            self::$pipes = [];
             proc_close(self::$proc);
             self::$proc = null;
             self::$serverPid = 0;
