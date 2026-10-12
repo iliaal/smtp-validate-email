@@ -207,6 +207,7 @@ class SmtpValidationTest extends TestCase
 
         $this->assertTrue($results['valid@localtest.test']);
         $this->assertArrayNotHasKey('catchall', $results['domains']['localtest.test']);
+        $this->assertSame(['valid@localtest.test', 'domains'], array_keys($results));
     }
 
     public function test_results_contain_domain_info(): void
