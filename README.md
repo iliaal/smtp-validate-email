@@ -137,6 +137,12 @@ $validator->clear_log();
 
 ## Running Tests
 
+The library supports PHP 8.1+, but the locked development dependencies
+(PHPUnit 12) require PHP 8.3+. CI runs the tests on PHP 8.4.
+Use that newer PHP CLI for both `composer install` and `vendor/bin/phpunit`.
+Enable the `dom`, `mbstring`, `xml`, and `xmlwriter` extensions, as in CI;
+Composer checks the complete extension requirements during installation.
+
 ### Unit tests
 
 No network required. Uses an in-memory SMTP conversation mock.
