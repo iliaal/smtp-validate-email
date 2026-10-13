@@ -27,8 +27,7 @@ class ExpectTest extends TestCase
     {
         $this->validator->queueResponse("251 User not local\r\n");
         $text = $this->validator->exposedExpect([250, 251]);
-        // sscanf('%d%s') captures only first word after code
-        $this->assertStringContainsString('User', $text);
+        $this->assertSame('User not local', $text);
     }
 
     public function test_unexpected_code_throws(): void
@@ -80,8 +79,7 @@ class ExpectTest extends TestCase
     {
         $this->validator->queueResponse("421 Service not available\r\n");
         $text = $this->validator->exposedExpect([250, 421]);
-        // sscanf('%d%s') captures only first word after code
-        $this->assertStringContainsString('Service', $text);
+        $this->assertSame('Service not available', $text);
     }
 
     public function test_empty_response_allowed(): void
