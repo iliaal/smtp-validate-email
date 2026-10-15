@@ -715,7 +715,10 @@ class SMTPValidateEmail
 			return TRUE;
 		} catch (SMTP_Validate_Email_Exception_Unexpected_Response $e) {
 			$this->debug('Unexpected response to RCPT TO: ' . $e->getMessage());
-			$this->results[$to . '_error_msg'] = $e->getMessage();
+			// Random catch-all probes are not addresses requested by the caller.
+			if (!$this->probing_catchall) {
+				$this->results[$to . '_error_msg'] = $e->getMessage();
+			}
 
 			return FALSE;
 		}
