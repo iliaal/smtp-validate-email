@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Protected `expect()` returns the complete final reply text instead of its first word, and `''` instead of the raw line for replies without text; subclasses that read its return value see the new values.
+
 ### Fixed
 
 - Keep rejected random catch-all probes out of recipient results; retain their diagnostics in the debug log.
