@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Keep rejected random catch-all probes out of recipient results; retain their diagnostics in the debug log.
 - Do not classify greylisted catch-all probes as accepted random mailboxes; keep the configured greylisting policy for real recipients.
 - Reject recipients on domains publishing a single preference-0 null MX without opening SMTP connections or trying the domain fallback.
 - Return the complete final response text from `expect()`, including multiword replies, and an empty string for replies without text.
