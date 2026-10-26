@@ -17,7 +17,7 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  *
- * @version 1.0.0
+ * @version 2.0.0
  * @todo
  *   - finish the graylisting thingy
  *   - perhaps re-implement some methods as static?
